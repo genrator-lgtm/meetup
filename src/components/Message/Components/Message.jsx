@@ -3,7 +3,10 @@ import { io } from "socket.io-client";
 import { useDispatch, useSelector } from "react-redux";
 import { useAuth } from "../../../context/AuthContex";
 import { Theme } from "../../../theme/globalTheme";
-import { addMessage } from "../../../redux/features/chats/chatSlice";
+import {
+  addMessage,
+  setLastMessage,
+} from "../../../redux/features/chats/chatSlice";
 import { fetchLastTwoDaysMessages } from "../../../redux/features/chats/chatThunks";
 import { formatDateHeader } from "../../../../utils/DateFormater";
 import { useTyping } from "../../../context/TypingContext";
@@ -18,7 +21,10 @@ export function Messaging({ slectedFriends }) {
 
   const [message, setMessage] = useState("");
   const [typingUserId, setTypingUserId] = useState(null);
+  const [suggestText, setSuggestText] = useState([]);
+  const isSelectingRef = useRef(false);
   const typingTimeoutRef = useRef(null);
+  const [command, setCommand] = useState(false);
   // const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
   // Socket connection (only once)
@@ -106,11 +112,19 @@ export function Messaging({ slectedFriends }) {
     socket.on("receive_message", handleMessage);
     socket.on("user typing", handleTyping);
     socket.on("user stop typing", handleStopTyping);
-
+    socket.on("suggestions", (suggestions) => {
+      setSuggestText(suggestions);
+    });
     return () => {
       socket.off("receive_message", handleMessage);
       socket.off("user typing", handleTyping);
       socket.off("user stop typing", handleStopTyping);
+      socket.off("suggestions");
+      //   socket.off('suggestions', (sug) => {
+      //   sug.forEach(element => {
+      //     console.log(element)
+      //   });
+      // })
     };
   }, [socket, slectedFriends, currentUserId, dispatch]);
 
@@ -128,10 +142,39 @@ export function Messaging({ slectedFriends }) {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  /**
+   *  actions and commands
+   * @param {*} e
+   * @returns
+   */
+  // heper funtion
+  // function randompos(min, max) {
+  //   return Math.random() * (max - min) + min;
+  // }
+  // "/confetti": (confetti) =>
+  //   confetti.default({
+  //     angle: randompos(55, 125),
+  //     spread: randompos(50, 70),
+  //     particleCount: randompos(50, 100),
+  //     origin: { y: 0.6 },
+  //   }),
+  const commandsAction = ["/confetti"];
+
   const handleInputChange = (e) => {
     const value = e.target.value;
     setMessage(value);
+    if (value.startsWith("/")) {
+      setCommand(true);
+    } else if (value.trim() === "") {
+      setCommand(false);
+    } else setCommand(false);
 
+    
+
+    if (isSelectingRef.current) {
+      isSelectingRef.current = false;
+      return;
+    }
     if (!socket || !slectedFriends.chatId) return;
 
     socket.emit("typing", {
@@ -139,6 +182,7 @@ export function Messaging({ slectedFriends }) {
       senderId: currentUserId,
     });
 
+    socket.emit("suggest", value);
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     typingTimeoutRef.current = setTimeout(() => {
       socket.emit("stop typing", {
@@ -152,6 +196,21 @@ export function Messaging({ slectedFriends }) {
     e.preventDefault();
     if (!message.trim() || !socket) return;
 
+    if (message.trim() === "/confetti") {
+      import("canvas-confetti").then((confetti) => {
+        confetti.default({
+          angle: 120,
+          spread: 100,
+          particleCount: 300,
+          origin: { x:1,y:1 },
+        });
+      });
+      setMessage('')
+      setCommand(false)
+      return;
+    }
+    
+    dispatch(setLastMessage(message));
     const newMsg = {
       from: currentUserId,
       to: slectedFriends._id,
@@ -162,6 +221,7 @@ export function Messaging({ slectedFriends }) {
     socket.emit("send_message", newMsg);
     dispatch(addMessage(newMsg));
     setMessage("");
+    setSuggestText([])
   };
 
   return (
@@ -264,13 +324,50 @@ export function Messaging({ slectedFriends }) {
         )}
 
         {/* Message Input */}
+        {command &&
+          commandsAction.map((value) => (
+            <div key={value} className="p-1 ">
+              <div className="flex gap-2 p-2  justify-end bg-gray-200 ">
+                <div
+                  className="border-b"
+                  onClick={() => {
+                    isSelectingRef.current = true;
+                    setMessage(value);
+                    setSuggestText([]);
+                  }}
+                >
+                  {value}
+                </div>
+                <div className="text-[10px] ">
+                  <button className="bg-gray-700 p-0.5 text-white font-medium rounded">
+                    Enter
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
         <footer
-          className="sticky bottom-0 w-full px-4 py-3 border-t border-gray-100 dark:border-gray-700"
+          className="sticky bottom-0 w-full px-4 py-3 border-t  border-gray-100 dark:border-gray-700 "
           style={{ backgroundColor: Theme.thirdBackgroundColor }}
         >
+          <div className="flex justify-center gap-10 mb-1 ">
+            {suggestText.slice(0,3).map((suggest, index) => (
+              <div
+                key={index}
+                className="bg-blue-400 text-sm text-white p-1 rounded-md font-medium"
+                onClick={() => {
+                  isSelectingRef.current = true;
+                  setMessage(suggest);
+                  setSuggestText([]);
+                }}
+              >
+                {suggest}
+              </div>
+            ))}
+          </div>
           <form
             onSubmit={sendMessage}
-            className="flex items-center gap-2 bg-white dark:bg-gray-700 p-2 rounded-full shadow"
+            className="flex items-center gap-2 bg-white dark:bg-gray-700 p-2 rounded-full"
           >
             <button
               type="button"
@@ -280,7 +377,7 @@ export function Messaging({ slectedFriends }) {
             </button>
             <input
               type="text"
-              placeholder="Write a message..."
+              placeholder="Write a message... or type / for cmd"
               value={message}
               onChange={handleInputChange}
               onBlur={() =>

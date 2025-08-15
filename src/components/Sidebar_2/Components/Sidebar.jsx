@@ -3,20 +3,23 @@ import { Theme } from "../../../theme/globalTheme";
 import Logo from "/logo.svg";
 import { Messaging } from "../../Message/Components/Message";
 import { useTyping } from "../../../context/TypingContext";
-import useOnline from '../../../utils/CheckOnline'
+import useOnline from "../../../utils/CheckOnline";
 import { UserContext } from "../../../context/Profile";
 import UserProfile from "../../Profile/PersonalInfo";
+import { useSelector } from "react-redux";
 
 export function Sidebar_Two({ token }) {
-  const off = useOnline()
-  const {typingUsers} = useTyping()
+  const off = useOnline();
+  const { typingUsers } = useTyping();
   const [active, setActive] = useState(null);
   const [selectedFriend, setSelectedFriend] = useState(null);
   const [friends, setFriends] = useState([]);
-  const {isProfile, setIsProfile} = useContext(UserContext)
+  const { isProfile, setIsProfile } = useContext(UserContext);
+  const lastMessages = useSelector((state) => state.chat.lastMessagesByUserId);
+  const lstMsgByMe = useSelector((state) => state.chat.lastMessage);
   useEffect(() => {
     fetch(`${import.meta.env.VITE_BACK_DEV_API}/chats`, {
-      method: "GET", 
+      method: "GET",
       credentials: "include",
       headers: { Authorization: `Bearer ${token}` },
     })
@@ -24,15 +27,16 @@ export function Sidebar_Two({ token }) {
       .then((data) => {
         const friends = data?.friends;
         if (friends) {
-          setFriends(friends)
+          setFriends(friends);
         } else {
-          setFriends([])
+          setFriends([]);
         }
-    }).catch((err) =>{
-      console.log('Failed to fetch Friends', err)
-    })
-  },[token])
-  
+      })
+      .catch((err) => {
+        console.log("Failed to fetch Friends", err);
+      });
+  }, [token]);
+
   function handleFriendSelect(friend) {
     setSelectedFriend(friend);
   }
@@ -40,10 +44,15 @@ export function Sidebar_Two({ token }) {
   if (isProfile) {
     return (
       <div className="w-[65%] p-4 flex flex-col gap-4 bg-gray-500">
-        <button onClick={() => setIsProfile(false)} className="h-6 w-6 bg-blue-400 text-white rounded-full text-sm cursor-pointer"><li className="fa-solid fa-arrow-left"></li></button>
-        <UserProfile/>
+        <button
+          onClick={() => setIsProfile(false)}
+          className="h-6 w-6 bg-blue-400 text-white rounded-full text-sm cursor-pointer"
+        >
+          <li className="fa-solid fa-arrow-left"></li>
+        </button>
+        <UserProfile />
       </div>
-    )
+    );
   }
 
   return (
@@ -78,43 +87,73 @@ export function Sidebar_Two({ token }) {
         </div>
         <div
           className="overflow-y-auto scrollbar scrollbar-thin scrollbar-track-sky-200  scrollbar-thumb-blue-400 max-h-[calc(100vh-112px)] px-2"
-          style={{ scrollbarGutter: 'stable' }}
+          style={{ scrollbarGutter: "stable" }}
         >
-        {friends.map((friend) => (
-          <div
-            onClick={() => handleFriendSelect(friend)}
-            key={friend._id}
-            // className="px-5 py-1  flex items-start justify-between mb-1 rounded-sm"
-            className={`px-5 py-2 flex items-start justify-between mb-1 rounded-sm cursor-pointer ${
-                selectedFriend?._id === friend._id ? 'bg-blue-100 border border-blue-300' : 'bg-white'
+          {friends.map((friend) => (
+            <div
+              onClick={() => handleFriendSelect(friend)}
+              key={friend._id}
+              // className="px-5 py-1  flex items-start justify-between mb-1 rounded-sm"
+              className={`px-5 py-2 flex items-start justify-between mb-1 rounded-sm cursor-pointer ${
+                selectedFriend?._id === friend._id
+                  ? "bg-blue-100 border border-blue-300"
+                  : "bg-white"
               }`}
-            style={{
-              backgroundColor: active === friend.id
-                ? Theme.onchat.inactive
-                : Theme.onchat.active,
-              border: active === friend.id
-                ? `1px solid ${Theme.onchat.borderColor}`: '',
-            }}
-          >
-            <div className="flex gap-2">
-              <img className="w-10 h-10 rounded-full mix-blend-multiply" src={friend.picture} alt={`profile picture of ${friend.name}`} />
-              <div className="">
-                <span>{friend.name}</span>
-                {/* {console.log(friend)} */}
-                {friend._id && typingUsers[friend._id] ? <p>typing ..</p> : ''
+              style={{
+                backgroundColor:
+                  active === friend.id
+                    ? Theme.onchat.inactive
+                    : Theme.onchat.active,
+                border:
+                  active === friend.id
+                    ? `1px solid ${Theme.onchat.borderColor}`
+                    : "",
+              }}
+            >
+              <div className="flex gap-2">
+                <img
+                  className="w-10 h-10 rounded-full mix-blend-multiply"
+                  src={friend.picture}
+                  alt={`profile picture of ${friend.name}`}
+                />
+                <div className="flex flex-col">
+                  <span>{friend.name}</span>
+                  {/* {console.log(friend)} */}
+                  {/* {friend._id && typingUsers[friend._id] ? <p>typing ..</p> : lastMessages[friend._id]?.text.length > 14 ? <span>{lastMessages[friend._id]?.text.slice(0, 14)}...</span> : <span>{lastMessages[friend._id]?.text}</span> || lstMsgByMe
                 
-                }
+                } */}
+                  {friend._id && typingUsers[friend._id] ? (
+                    <p>typing ..</p>
+                  ) : lastMessages[friend._id]?.text ? (
+                    <span>
+                      {lastMessages[friend._id].text.length > 14
+                        ? `${lastMessages[friend._id].text.slice(0, 14)}...`
+                        : lastMessages[friend._id].text}
+                    </span>
+                  ) : lstMsgByMe ? (
+                    <span>
+                      {lstMsgByMe.length > 14
+                        ? `${lstMsgByMe.slice(0, 14)}...`
+                        : lstMsgByMe}
+                    </span>
+                  ) : (
+                    <span>No messages yet</span>
+                  )}
+                </div>
               </div>
+              <span>
+                {friend.lastMessageAt
+                  ? new Date(friend.lastMessageAt).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })
+                  : ""}
+              </span>
             </div>
-            <span>{friend.lastMessageAt 
-                  ? new Date(friend.lastMessageAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                  : ''
-                }</span>
-          </div>
-        ))}
-          </div>
+          ))}
+        </div>
       </div>
-      {!selectedFriend  ? (
+      {!selectedFriend ? (
         <div
           className="hidden md:flex w-[65%] p-1.5  py-5  justify-center items-center "
           style={{ backgroundColor: Theme.primaryBackgroundColor }}
@@ -132,7 +171,7 @@ export function Sidebar_Two({ token }) {
           </div>
         </div>
       ) : (
-        <Messaging slectedFriends={selectedFriend}  />
+        <Messaging slectedFriends={selectedFriend} />
       )}
     </>
   );
